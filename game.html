@@ -1,0 +1,174 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml">
+<head runat="server">
+    <title></title>
+    <script src="Scripts/jquery-1.8.2.js" type="text/javascript"></script>
+    <script src="Scripts/jqueryhotkey.js" type="text/javascript"></script>
+    <script src="Scripts/KeyStatus.js" type="text/javascript"></script>
+    <script src="Scripts/Box2dWeb-2.1.a.3.js" type="text/javascript"></script>
+    <script src="Scripts/box2dGeneral.js" type="text/javascript"></script>
+    
+    <script type="text/javascript">
+        $(document).ready(function () {
+            var Released = false; var score = 0;
+            var ctx = $("#b2dCanvas")[0].getContext("2d");
+            var physics = new Physics($("#b2dCanvas")[0]);
+            physics.collision();
+           // physics.dragNDrop();
+            physics.debug();
+            var lastFrame = new Date().getTime();
+            var leftBasket = new Body(physics, { color: "Green", type: "static", x: 27, y: 23.8, height: 2, width: 0.1 });
+            var rightbasket = new Body(physics, { color: "Green", type: "static", x: 28.8, y: 23.8, height: 2, width: 0.1 });
+            var BottomBasket = new Body(physics, { color: "Green", type: "static", x: 27.8, y: 24, height: 0.1, width: 1.7, name: "Ground" });
+            var Brick = new Body(physics, { color: "Green", type: "static", x: 6, y: 17, height: 0.1, width: 2, name: "bricks" });
+            var lastlink = Brick.body;
+            var last_anchor_point = new b2Vec2(0, 0.2);
+            var r_height = 1.1;
+            var revolute_joint = new b2RevoluteJointDef();
+            var joint = null;
+            var revoluteBall_joint = new b2RevoluteJointDef();
+            var MaxVel = 9;
+            var Balls = {
+                _Collection: [],
+                add: function () {
+                    if (this._Collection.length >= 1) return;
+                    var b = new Body(physics, { color: "rgb(219,234,249)", shape: "circle", x: 2, y: 15, radius: 0.5, name: "ball", OnGround: false, IsJumping: false, IsHanging: false });
+                    this._Collection.push(b);
+                    revoluteBall_joint.bodyA = lastlink;
+                    revoluteBall_joint.bodyB = b.body;
+                    revoluteBall_joint.localAnchorA = last_anchor_point;
+                    revoluteBall_joint.localAnchorB = new b2Vec2(0, 0.8);
+                    last_anchor_point = new b2Vec2(0, -1 * r_height / 2);
+                    joint = physics.world.CreateJoint(revoluteBall_joint);
+                },
+                remove: function (ball) {
+                    physics.world.DestroyBody(ball.body);
+                },
+                update: function () {
+                    for (i = 0; i < Balls._Collection.length; i++) {
+                        var ball = Balls._Collection[i];
+                        if (keydown.right && !ball.details.IsJumping) {
+                            if (ball.body.GetLinearVelocity().x < MaxVel) {
+                                if (!ball.details.IsJumping)
+                                    ball.body.ApplyImpulse(new b2Vec2(MaxVel, 0), ball.body.GetWorldCenter());
+                            }
+                        }
+                        if (keydown.left && !ball.details.IsJumping) {
+                            if (ball.body.GetLinearVelocity().x > -MaxVel) { //if we haven't reached the max speed in this direction
+                                ball.body.ApplyImpulse(new b2Vec2(-MaxVel, 0), ball.body.GetWorldCenter());
+                            }
+                        }
+                        //                if (keydown.up && !ball.details.IsJumping ) {
+                        //                    ball.details.IsJumping = true;
+                        //                    ball.body.ApplyImpulse(new b2Vec2(0, -10), ball.body.GetWorldCenter());
+
+
+                        //                }
+                        //                if (!keydown.right && !keydown.left) {
+                        //                    // ball.body.GetLinearVelocity().x = 0; // stop the ball from moving when keydown is up
+                        //                }
+
+
+
+                        if (keydown.space) {
+
+                            ball.details.IsJumping = true;
+                            var list = physics.world.GetJointList();
+                            if (joint) {
+                                physics.world.DestroyJoint(joint);
+                            }
+                        }
+
+
+                      
+                        if (ball.body.GetPosition().x > 50 || ball.body.GetPosition().x < 0 || ball.body.GetPosition().y < 0 || ball.body.GetPosition().y > 30) {
+                            Balls.remove(ball);
+                            Balls._Collection = [];
+                            Balls.add();
+                        }
+                    }
+                }
+            };
+
+            var Firstball = new Body(physics, { color: "rgb(219,234,249)", shape: "circle", x: 2, y: 15, radius: 0.5, name: "ball", OnGround: false, IsJumping: false, IsHanging: false });
+            Balls._Collection.push(Firstball);
+            
+
+
+            Firstball.contact = function (contact, impulse, first) {
+                var ShapeName = contact.GetFixtureA().GetBody().GetUserData().details.name;
+                if (ShapeName == "Ground") {
+                    score++;
+                    Balls._Collection = [];
+                    Balls.add();
+                }
+            }
+
+
+
+            var gameLoop = function () {
+                var tm = new Date().getTime();
+                requestAnimationFrame(gameLoop);
+                var dt = (tm - lastFrame) / 1000;
+                if (dt > 1 / 15) { dt = 1 / 15; }
+
+                update(dt);
+                physics.step(dt);
+                DrawScore();
+                lastFrame = tm;
+
+            };
+            requestAnimationFrame(gameLoop);
+
+
+
+
+            function DrawScore() {
+                ctx.font = "15px Georgia";
+                ctx.fillStyle = "white";
+                ctx.fillText("score :" + score, 25, 25);
+                ctx.fillText("1- press left or right to move the rope", 720, 27);
+                ctx.fillText("2- press space to release the ball", 720, 52);
+            }
+
+
+
+            function DrawPendulem() {
+                for (i = 0; i <= 2; i++) {
+                    var chain = new Body(physics, { color: "Green", x: 23, y: (32 - i), height: 0.8, width: 0.3, name: "bricks" });
+
+                    revolute_joint.bodyA = lastlink;
+                    revolute_joint.bodyB = chain.body;
+                    revolute_joint.localAnchorA = last_anchor_point;
+                    revolute_joint.localAnchorB = new b2Vec2(0, 0.8);
+                    last_anchor_point = new b2Vec2(0, -1 * 0.8);
+                    physics.world.CreateJoint(revolute_joint);
+
+                    lastlink = chain.body;
+                }
+
+                revoluteBall_joint.bodyA = lastlink;
+                revoluteBall_joint.bodyB = Firstball.body;
+                revoluteBall_joint.localAnchorA = last_anchor_point;
+                revoluteBall_joint.localAnchorB = new b2Vec2(0, 0.8);
+                last_anchor_point = new b2Vec2(0, -1 * r_height / 2);
+                joint = physics.world.CreateJoint(revoluteBall_joint);
+            }
+            DrawPendulem();
+
+            function update(dt) {
+
+                Balls.update()
+            }
+
+        });
+    </script>
+</head>
+<body>
+    <form id="form1" runat="server">
+    <div>
+       <canvas id="b2dCanvas" width="1024" height="500" backgroundcolor="2A3038" style="background-color:black" ></canvas>
+    </div>
+    </form>
+</body>
+</html>
